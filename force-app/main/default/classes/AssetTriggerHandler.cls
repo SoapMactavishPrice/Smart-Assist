@@ -14,15 +14,12 @@ public with sharing class AssetTriggerHandler {
         }
 
         Map<Id, Integer> accountsAssetCount = new Map<Id, Integer>();
-
-        List<AggregateResult> aggregateResults = [
+        for (AggregateResult ar : [
             SELECT AccountId, COUNT(Id) assetCount
             FROM Asset
             WHERE AccountId IN :accountIds
             GROUP BY AccountId
-        ];
-
-        for (AggregateResult ar : aggregateResults) {
+        ]) {
             accountsAssetCount.put((Id) ar.get('AccountId'), (Integer) ar.get('assetCount'));
         }
 
@@ -108,14 +105,13 @@ public with sharing class AssetTriggerHandler {
                 LastName          = con.LastName,
                 Email             = con.Email,
                 ContactId         = con.Id,
-                AccountId         = accId,
                 ProfileId         = customerProfile.Id,
                 Username          = finalUsername,
                 Alias             = (con.LastName.length() > 6 ? con.LastName.substring(0, 6) : con.LastName),
-                TimeZoneSidKey    = 'Asia/Kolkata',
-                LocaleSidKey      = 'en_IN',
+                TimeZoneSidKey    = 'America/Los_Angeles',
+                LocaleSidKey      = 'en_US',
                 EmailEncodingKey  = 'UTF-8',
-                LanguageLocaleKey = 'en_IN',
+                LanguageLocaleKey = 'en_US',
                 IsActive          = true
             ));
         }
@@ -125,8 +121,17 @@ public with sharing class AssetTriggerHandler {
         }
 
         List<Database.SaveResult> results = Database.insert(newUsers, false);
+
         for (Integer i = 0; i < results.size(); i++) {
-            if (!results[i].isSuccess()) {
+            if (results[i].isSuccess()) {
+                try {
+                    System.resetPassword(results[i].getId(), true);
+                } catch (Exception e) {
+                    System.debug(LoggingLevel.ERROR,
+                        'User created but invite email failed for User ' +
+                        results[i].getId() + ': ' + e.getMessage());
+                }
+            } else {
                 for (Database.Error err : results[i].getErrors()) {
                     System.debug(LoggingLevel.ERROR,
                         'Failed to create Experience Cloud user for Account ' +
