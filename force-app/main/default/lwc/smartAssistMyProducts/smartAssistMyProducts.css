@@ -1,0 +1,292 @@
+:host {
+    --sa-brand: #0b5cab;
+    --sa-brand-dark: #043a72;
+    --sa-brand-light: #eef5fc;
+    --sa-success: #2e844a;
+    --sa-success-light: #e8f5ec;
+    --sa-warning: #b1710d;
+    --sa-warning-light: #fdf3e5;
+    --sa-error: #ba0517;
+    --sa-error-light: #fdecee;
+    --sa-text: #1a1a1a;
+    --sa-text-muted: #5c6773;
+    --sa-border: #e5e8eb;
+    --sa-radius: 12px;
+    --sa-shadow: 0 2px 6px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    display: block;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: var(--sa-text);
+}
+
+.sa-page {
+    max-width: 960px;
+    margin: 0 auto;
+    padding-bottom: 3rem;
+}
+
+/* ===================== HEADER ===================== */
+.sa-header {
+    background: linear-gradient(135deg, var(--sa-brand) 0%, var(--sa-brand-dark) 100%);
+    padding: 1.5rem 1.25rem;
+    border-radius: 0 0 var(--sa-radius) var(--sa-radius);
+    margin-bottom: 1.5rem;
+}
+
+.sa-header-inner {
+    max-width: 960px;
+    margin: 0 auto;
+}
+
+.sa-header-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.sa-header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.15);
+    flex-shrink: 0;
+}
+
+.sa-header-title {
+    font-size: 1.375rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.sa-header-subtitle {
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin: 0.125rem 0 0 0;
+}
+
+/* ===================== BODY ===================== */
+.sa-body {
+    padding: 0 1rem;
+}
+
+.sa-intro-text {
+    font-size: 0.9375rem;
+    color: var(--sa-text-muted);
+    margin: 0 0 1rem 0;
+}
+
+/* ===================== CARD BASE ===================== */
+.sa-card {
+    background: #ffffff;
+    border: 1px solid var(--sa-border);
+    border-radius: var(--sa-radius);
+    box-shadow: var(--sa-shadow);
+    padding: 1.5rem;
+}
+
+/* ===================== ERROR BANNER ===================== */
+.sa-error-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    background: var(--sa-error-light);
+    border-color: #f3b9bf;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.sa-error-icon {
+    margin-top: 0.0625rem;
+    flex-shrink: 0;
+}
+
+.sa-error-text {
+    margin: 0;
+    color: var(--sa-error);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* ===================== LOADING ===================== */
+.sa-loading-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 2.5rem 1.5rem;
+    position: relative;
+    min-height: 90px;
+}
+
+.sa-loading-text {
+    margin: 0;
+    color: var(--sa-text-muted);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    text-align: center;
+}
+
+/* ===================== EMPTY STATE ===================== */
+.sa-empty-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.5rem;
+    padding: 2.5rem 1.5rem;
+}
+
+.sa-empty-icon {
+    margin-bottom: 0.25rem;
+    --sds-c-icon-color-foreground-default: var(--sa-text-muted);
+}
+
+.sa-empty-title {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.sa-empty-text {
+    font-size: 0.9375rem;
+    color: var(--sa-text-muted);
+    margin: 0;
+    max-width: 420px;
+}
+
+/* ===================== PRODUCT GRID ===================== */
+.sa-product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+}
+
+.sa-product-card {
+    background: #ffffff;
+    border: 1px solid var(--sa-border);
+    border-radius: var(--sa-radius);
+    box-shadow: var(--sa-shadow);
+    padding: 1.25rem;
+    cursor: pointer;
+    transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.sa-product-card:hover,
+.sa-product-card:focus-within {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+    border-color: var(--sa-brand);
+    transform: translateY(-2px);
+}
+
+.sa-product-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.sa-product-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--sa-brand-light);
+}
+
+.sa-status-badge {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.1875rem 0.625rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.sa-status-active {
+    background: var(--sa-success-light);
+    color: var(--sa-success);
+}
+
+.sa-status-neutral {
+    background: #f2f4f6;
+    color: var(--sa-text-muted);
+}
+
+.sa-product-name {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: var(--sa-text);
+    margin: 0 0 0.125rem 0;
+}
+
+.sa-product-subname {
+    font-size: 0.8125rem;
+    color: var(--sa-text-muted);
+    margin: 0 0 1rem 0;
+}
+
+.sa-product-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    flex-grow: 1;
+}
+
+.sa-product-detail-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.sa-field-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--sa-text-muted);
+    flex-shrink: 0;
+}
+
+.sa-field-value {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--sa-text);
+    text-align: right;
+    word-break: break-word;
+}
+
+.sa-product-card-footer {
+    margin-top: auto;
+}
+
+.sa-support-button {
+    width: 100%;
+}
+
+/* ===================== RESPONSIVE ===================== */
+@media (max-width: 480px) {
+    .sa-body {
+        padding: 0 0.75rem;
+    }
+
+    .sa-header {
+        padding: 1.25rem 1rem;
+        border-radius: 0;
+    }
+
+    .sa-product-grid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -1,0 +1,228 @@
+<template>
+    <div class="sa-page">
+
+        <!-- ===================== HEADER ===================== -->
+        <div class="sa-header">
+            <div class="sa-header-inner">
+                <div class="sa-header-brand">
+                    <span class="sa-header-icon" aria-hidden="true">
+                        <lightning-icon icon-name="utility:einstein" size="small" variant="inverse"></lightning-icon>
+                    </span>
+                    <div class="sa-header-text">
+                        <h1 class="sa-header-title">SmartAssist 360</h1>
+                        <p class="sa-header-subtitle">SmartHome Pro AI Support</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sa-body">
+
+            <!-- ===================== GLOBAL ERROR BANNER ===================== -->
+            <template if:true={hasError}>
+                <div class="sa-card sa-error-banner" role="alert">
+                    <lightning-icon icon-name="utility:error" size="x-small" variant="error" class="sa-error-icon"></lightning-icon>
+                    <p class="sa-error-text">{errorMessage}</p>
+                </div>
+            </template>
+
+            <!-- ===================== INITIAL LOADING ===================== -->
+            <template if:true={isContextLoading}>
+                <div class="sa-card sa-loading-card">
+                    <lightning-spinner alternative-text="Loading product information" size="small"></lightning-spinner>
+                    <p class="sa-loading-text">Loading your product information...</p>
+                </div>
+            </template>
+
+            <template if:true={showMainContent}>
+
+                <!-- ===================== PRODUCT CONTEXT CARD ===================== -->
+                <div class="sa-card sa-product-card">
+                    <h2 class="sa-card-title">Your Product</h2>
+                    <div class="sa-product-grid">
+                        <div class="sa-product-field">
+                            <span class="sa-field-label">Product</span>
+                            <span class="sa-field-value">{assetContext.productName}</span>
+                        </div>
+                        <div class="sa-product-field">
+                            <span class="sa-field-label">Asset Name</span>
+                            <span class="sa-field-value">{assetContext.assetName}</span>
+                        </div>
+                        <div class="sa-product-field">
+                            <span class="sa-field-label">Serial Number</span>
+                            <span class="sa-field-value">{assetContext.serialNumber}</span>
+                        </div>
+                        <div class="sa-product-field">
+                            <span class="sa-field-label">Purchase Date</span>
+                            <span class="sa-field-value">{assetContext.purchaseDateFormatted}</span>
+                        </div>
+                        <div class="sa-product-field">
+                            <span class="sa-field-label">Status</span>
+                            <span class={statusBadgeClass}>{assetContext.status}</span>
+                        </div>
+                        <template if:true={assetContext.warrantyInfo}>
+                            <div class="sa-product-field">
+                                <span class="sa-field-label">Warranty</span>
+                                <span class="sa-field-value">{assetContext.warrantyInfo}</span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- ===================== QUESTION CARD ===================== -->
+                <template if:true={showQuestionCard}>
+                    <div class="sa-card sa-question-card">
+                        <h2 class="sa-card-title">How can we help?</h2>
+                        <lightning-textarea
+                            class="sa-textarea"
+                            label="Describe your issue"
+                            placeholder="Tell us what you're experiencing with this product..."
+                            value={questionText}
+                            onchange={handleQuestionChange}
+                            max-length="4000"
+                            disabled={isAsking}>
+                        </lightning-textarea>
+                        <div class="sa-question-actions">
+                            <lightning-button
+                                variant="brand"
+                                label="Ask SmartAssist"
+                                icon-name="utility:einstein"
+                                onclick={handleAskSmartAssist}
+                                disabled={isAskDisabled}
+                                class="sa-ask-button">
+                            </lightning-button>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ===================== AI PROCESSING LOADING ===================== -->
+                <template if:true={isAsking}>
+                    <div class="sa-card sa-loading-card">
+                        <lightning-spinner alternative-text="Analyzing your request" size="small"></lightning-spinner>
+                        <p class="sa-loading-text">SmartAssist is analyzing your request...</p>
+                    </div>
+                </template>
+
+                <!-- ===================== AI RESPONSE CARD ===================== -->
+                <template if:true={showResponseCard}>
+                    <div class="sa-card sa-response-card">
+                        <div class="sa-response-header">
+                            <lightning-icon icon-name="utility:einstein" size="small" class="sa-response-icon"></lightning-icon>
+                            <h2 class="sa-card-title">SmartAssist Recommendation</h2>
+                        </div>
+                        <p class="sa-response-text">{aiResult.responseText}</p>
+
+                        <div class="sa-analysis-divider"></div>
+
+                        <h3 class="sa-analysis-title">AI Analysis</h3>
+                        <div class="sa-analysis-grid">
+                            <div class="sa-analysis-field">
+                                <span class="sa-field-label">Category</span>
+                                <span class="sa-field-value">{aiResult.category}</span>
+                            </div>
+                            <div class="sa-analysis-field">
+                                <span class="sa-field-label">Subcategory</span>
+                                <span class="sa-field-value">{aiResult.subcategory}</span>
+                            </div>
+                        </div>
+
+                        <div class="sa-analysis-field sa-summary-field">
+                            <span class="sa-field-label">Summary</span>
+                            <p class="sa-field-value">{aiResult.summary}</p>
+                        </div>
+
+                        <div class="sa-analysis-field sa-summary-field">
+                            <span class="sa-field-label">Recommended Action</span>
+                            <p class="sa-field-value">{aiResult.recommendation}</p>
+                        </div>
+
+                        <div class="sa-confidence-block">
+                            <div class="sa-confidence-header">
+                                <span class="sa-field-label">Confidence</span>
+                                <span class={confidenceBadgeClass}>{confidencePercentDisplay} Confidence</span>
+                            </div>
+                            <div class="sa-progress-track">
+                                <div class={confidenceBarClass} style={confidenceBarStyle}></div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- ===================== LOW CONFIDENCE AUTO-CASE MESSAGE ===================== -->
+                <template if:true={isLowConfidenceProcessing}>
+                    <div class="sa-card sa-loading-card">
+                        <lightning-spinner alternative-text="Creating support case" size="small"></lightning-spinner>
+                        <p class="sa-loading-text">Your request requires additional assistance. We're creating a support case for our support team.</p>
+                    </div>
+                </template>
+
+                <!-- ===================== SATISFACTION CARD ===================== -->
+                <template if:true={showSatisfactionCard}>
+                    <div class="sa-card sa-satisfaction-card">
+                        <template if:true={showInitialSatisfactionQuestion}>
+                            <h2 class="sa-card-title">Are you satisfied with this answer?</h2>
+                            <div class="sa-satisfaction-actions">
+                                <lightning-button
+                                    variant="brand"
+                                    label="Yes, this solved my issue"
+                                    onclick={handleSatisfiedYes}
+                                    disabled={isSatisfactionProcessing}>
+                                </lightning-button>
+                                <lightning-button
+                                    variant="neutral"
+                                    label="No, I still need help"
+                                    onclick={handleSatisfiedNo}
+                                    disabled={isSatisfactionProcessing}>
+                                </lightning-button>
+                            </div>
+                        </template>
+
+                        <template if:true={showCreateCaseQuestion}>
+                            <h2 class="sa-card-title">Would you like to create a support case?</h2>
+                            <div class="sa-satisfaction-actions">
+                                <lightning-button
+                                    variant="brand"
+                                    label="Yes, Create Case"
+                                    onclick={handleCreateCaseYes}
+                                    disabled={isSatisfactionProcessing}>
+                                </lightning-button>
+                                <lightning-button
+                                    variant="neutral"
+                                    label="No, I'm done"
+                                    onclick={handleCreateCaseNo}
+                                    disabled={isSatisfactionProcessing}>
+                                </lightning-button>
+                            </div>
+                        </template>
+
+                        <template if:true={isSatisfactionProcessing}>
+                            <div class="sa-inline-spinner">
+                                <lightning-spinner alternative-text="Processing" size="x-small"></lightning-spinner>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- ===================== RESOLVED (NO CASE) CONFIRMATION ===================== -->
+                <template if:true={showResolvedConfirmation}>
+                    <div class="sa-card sa-success-card">
+                        <lightning-icon icon-name="utility:success" size="medium" variant="success" class="sa-success-icon"></lightning-icon>
+                        <p class="sa-success-text">{resolvedMessage}</p>
+                    </div>
+                </template>
+
+                <!-- ===================== CASE CONFIRMATION CARD ===================== -->
+                <template if:true={showCaseConfirmation}>
+                    <div class="sa-card sa-success-card">
+                        <lightning-icon icon-name="utility:case" size="medium" variant="success" class="sa-success-icon"></lightning-icon>
+                        <p class="sa-success-text">Your support case has been created successfully.</p>
+                        <template if:true={caseNumber}>
+                            <p class="sa-case-number">Case Number: <strong>{caseNumber}</strong></p>
+                        </template>
+                    </div>
+                </template>
+
+            </template>
+        </div>
+    </div>
+</template>
