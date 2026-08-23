@@ -1,0 +1,219 @@
+.support-shell {
+    min-height: 100%;
+    color: #172033;
+}
+
+.page-header,
+.support-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+h1 {
+    margin: 0;
+    font-size: 1.65rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+h3 {
+    margin: 0 0 0.35rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+p {
+    margin: 0.25rem 0 0;
+    color: #475569;
+}
+
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+    gap: 1rem;
+}
+
+.product-card,
+.case-card,
+.support-panel,
+.ai-response,
+.decision-panel,
+.success-panel,
+.empty-state,
+.loading-state,
+.error-panel {
+    border: 1px solid #d9e2ef;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.product-card,
+.case-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+}
+
+.card-topline,
+.case-header,
+.response-header,
+.confidence,
+.success-panel,
+.error-panel {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.card-topline,
+.case-header,
+.response-header {
+    justify-content: space-between;
+}
+
+dl {
+    display: grid;
+    gap: 0.65rem;
+    margin: 0;
+}
+
+dt {
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+dd {
+    margin: 0.1rem 0 0;
+    color: #1e293b;
+}
+
+.support-panel {
+    padding: 1.25rem;
+}
+
+.support-heading {
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.support-heading lightning-icon {
+    --slds-c-icon-color-foreground-default: #0ea5e9;
+}
+
+.question-box {
+    margin-top: 1rem;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.processing-state,
+.loading-state,
+.empty-state,
+.decision-panel,
+.success-panel,
+.error-panel {
+    padding: 1rem;
+}
+
+.processing-state,
+.loading-state,
+.empty-state {
+    display: grid;
+    gap: 0.75rem;
+    justify-items: center;
+    color: #475569;
+}
+
+.ai-response,
+.decision-panel,
+.success-panel {
+    margin-top: 1rem;
+}
+
+.ai-response {
+    padding: 1rem;
+    background: #f8fafc;
+}
+
+.response-text {
+    margin-top: 0.85rem;
+    color: #1e293b;
+    white-space: pre-wrap;
+}
+
+.analysis-grid {
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    margin-top: 1rem;
+}
+
+.recommendation {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #dbe5f2;
+}
+
+.case-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.back-button {
+    display: inline-flex;
+    gap: 0.4rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.4rem 0;
+    border: 0;
+    background: transparent;
+    color: #1d4ed8;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.success-panel {
+    background: #ecfdf5;
+    border-color: #86efac;
+}
+
+.success-panel lightning-icon {
+    --slds-c-icon-color-foreground-default: #16a34a;
+}
+
+.error-panel {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #991b1b;
+}
+
+@media (max-width: 720px) {
+    .page-header,
+    .support-heading,
+    .response-header {
+        display: grid;
+    }
+
+    .support-panel,
+    .product-card,
+    .case-card {
+        padding: 0.9rem;
+    }
+}

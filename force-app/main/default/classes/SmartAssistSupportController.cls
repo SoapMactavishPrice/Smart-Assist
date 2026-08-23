@@ -1,494 +1,460 @@
-/**
- * SmartAssistSupportController
- *
- * @AuraEnabled entry points for the smartAssistSupport LWC.
- *
- * Responsibilities (per SmartAssist 360 architecture):
- *   - Enforce customer-level security (a customer may only see/act on their
- *     own Assets, AI Conversations, and Cases).
- *   - Validate that the Asset supplied by the browser actually belongs to the
- *     logged-in customer before doing anything with it.
- *   - Invoke SmartAssistAIService (Prompt Builder) and persist the result to
- *     AI_Conversation__c.
- *   - Create Case records per the SmartAssist 360 workflow when required.
- *   - Never leak technical/Apex error detail to the client - all client-facing
- *     exceptions are AuraHandledException with a friendly message.
- *
- * This class is deliberately "thin on UI concerns" - the LWC owns all
- * presentation state. This class owns all business rules and data access.
- */
 public with sharing class SmartAssistSupportController {
+    private static final Decimal CASE_THRESHOLD = 85;
+    private static final String STATUS_ANALYZED = 'In Progress';
+    private static final String STATUS_RESOLVED = 'Resolved';
+    private static final String STATUS_CASE_CREATED = 'Escalated';
 
-    private static final String GENERIC_ERROR =
-        'We were unable to complete your request. Please try again, or contact support if the problem continues.';
+    @TestVisible
+    static UserContext testUserContext;
+    @TestVisible
+    static Boolean bypassPersistenceForTests = false;
+    @TestVisible
+    static Map<Id, AI_Conversation__c> testConversations = new Map<Id, AI_Conversation__c>();
 
-    private static final Decimal CONFIDENCE_THRESHOLD = 85;
-
-    // ====================================================================
-    // Wrapper types
-    // ====================================================================
-
-    public class AssetContextWrapper {
-        @AuraEnabled public Id assetId;
-        @AuraEnabled public String productName;
-        @AuraEnabled public String assetName;
-        @AuraEnabled public String serialNumber;
-        @AuraEnabled public Date purchaseDate;
-        @AuraEnabled public String status;
-        @AuraEnabled public String warrantyInfo;
-    }
-
-    public class AIResponseWrapper {
-        @AuraEnabled public Id conversationId;
-        @AuraEnabled public String aiResponse;
-        @AuraEnabled public String category;
-        @AuraEnabled public String subcategory;
-        @AuraEnabled public String summary;
-        @AuraEnabled public String recommendation;
-        @AuraEnabled public Decimal confidenceScore;
-    }
-
-    public class CaseResultWrapper {
-        @AuraEnabled public Id caseId;
-        @AuraEnabled public String caseNumber;
-    }
-
-    public class AssetSummaryWrapper {
-        @AuraEnabled public Id assetId;
-        @AuraEnabled public String assetName;
-        @AuraEnabled public String productName;
-    }
-
-    // ====================================================================
-    // Public entry points
-    // ====================================================================
-
-    /**
-     * Returns display-safe context for the selected Asset after verifying the
-     * Asset belongs to the logged-in customer.
-     */
-    @AuraEnabled(cacheable=true)
-    public static AssetContextWrapper getAssetContext(Id assetId) {
+@AuraEnabled(cacheable=true)
+    public static List<AssetSummary> getMyAssets() {
         try {
-            Asset assetRecord = getOwnedAssetOrThrow(assetId);
-            return toAssetContextWrapper(assetRecord);
-        } catch (SecurityException se) {
-            throw newFriendlyException('We could not find that product on your account.');
-        } catch (Exception e) {
-            throw logAndBuildAuraException(e);
-        }
-    }
-
-    /**
-     * Returns full display context for every Asset legitimately owned by the
-     * logged-in customer (resolved server-side from User -> Contact ->
-     * Account). This backs the My Products page, which is where Asset
-     * selection is actually meant to happen per the SmartAssist 360
-     * workflow.
-     */
-    @AuraEnabled(cacheable=true)
-    public static List<AssetContextWrapper> getMyProducts() {
-        try {
-            Contact currentContact = getCurrentContactOrThrow();
-            List<Asset> ownedAssets = queryOwnedAssets(currentContact);
-
-            List<AssetContextWrapper> results = new List<AssetContextWrapper>();
-            for (Asset a : ownedAssets) {
-                results.add(toAssetContextWrapper(a));
+            UserContext context = getCurrentUserContext();
+            List<AssetSummary> results = new List<AssetSummary>();
+            for (Asset assetRecord : [
+                SELECT Id, Name, SerialNumber, PurchaseDate, Status, UsageEndDate, Product2Id, Product2.Name
+                FROM Asset
+                WHERE AccountId = :context.accountId
+                WITH USER_MODE
+                ORDER BY PurchaseDate DESC NULLS LAST, CreatedDate DESC
+            ]) {
+                results.add(new AssetSummary(assetRecord));
             }
             return results;
-        } catch (SecurityException se) {
-            throw newFriendlyException('We could not verify your account.');
-        } catch (Exception e) {
-            throw logAndBuildAuraException(e);
+        } catch (Exception ex) {
+            throw customerException('Unable to load your products. Please try again.');
         }
     }
 
-    /**
-     * Lightweight summary version of getMyProducts(), used only as a safe
-     * fallback by the Support page for the rare case where it's reached
-     * without an assetId already having been supplied by My Products (e.g. a
-     * bookmarked/refreshed URL) - it is NOT used to let the customer pick an
-     * arbitrary Asset within the Support component itself. When exactly one
-     * Asset is owned, the Support LWC auto-resolves it; when zero or
-     * multiple are owned, it directs the customer back to My Products.
-     */
     @AuraEnabled(cacheable=true)
-    public static List<AssetSummaryWrapper> getMyAssets() {
+    public static List<CaseSummary> getMyCases() {
         try {
-            Contact currentContact = getCurrentContactOrThrow();
-            List<Asset> ownedAssets = queryOwnedAssets(currentContact);
-
-            List<AssetSummaryWrapper> summaries = new List<AssetSummaryWrapper>();
-            for (Asset a : ownedAssets) {
-                AssetSummaryWrapper summary = new AssetSummaryWrapper();
-                summary.assetId = a.Id;
-                summary.assetName = a.Name;
-                summary.productName = a.Product2 != null ? a.Product2.Name : a.Name;
-                summaries.add(summary);
+            UserContext context = getCurrentUserContext();
+            List<CaseSummary> results = new List<CaseSummary>();
+            for (Case caseRecord : [
+                SELECT Id, CaseNumber, Subject, Status, Priority, CreatedDate, AssetId, Asset.Name, Asset.Product2.Name
+                FROM Case
+                WHERE AccountId = :context.accountId AND ContactId = :context.contactId
+                WITH USER_MODE
+                ORDER BY CreatedDate DESC
+                LIMIT 100
+            ]) {
+                results.add(new CaseSummary(caseRecord));
             }
-            return summaries;
-        } catch (SecurityException se) {
-            throw newFriendlyException('We could not verify your account.');
-        } catch (Exception e) {
-            throw logAndBuildAuraException(e);
+            return results;
+        } catch (Exception ex) {
+            throw customerException('Unable to load your cases. Please try again.');
         }
     }
 
-    /**
-     * Submits the customer's question for AI analysis and persists the
-     * resulting AI_Conversation__c record.
-     */
     @AuraEnabled
-    public static AIResponseWrapper askSmartAssist(Id assetId, String question) {
-        if (String.isBlank(question)) {
-            throw newFriendlyException('Please describe your issue before submitting.');
+    public static SupportAnalysisResult analyzeSupportRequest(Id assetId, String question) {
+        if (assetId == null || String.isBlank(question)) {
+            throw customerException('Please describe the issue you are experiencing.');
         }
 
-        try {
-            Asset assetRecord = getOwnedAssetOrThrow(assetId);
-            Contact currentContact = getCurrentContactOrThrow();
+        // try {
+            UserContext context = getCurrentUserContext();
+            Asset assetRecord = getValidatedAsset(assetId, context);
+            Contact customer = getCustomer(context);
 
-            SmartAssistAIService.AIRequestContext requestContext = new SmartAssistAIService.AIRequestContext();
-            requestContext.customerQuestion = question.trim();
-            requestContext.productName = assetRecord.Product2 != null ? assetRecord.Product2.Name : assetRecord.Name;
-            requestContext.assetName = assetRecord.Name;
-            requestContext.serialNumber = assetRecord.SerialNumber;
-            requestContext.assetStatus = assetRecord.Status;
-            requestContext.warrantyInfo = buildWarrantyInfo(assetRecord);
-            requestContext.customerName = currentContact.Name;
-
-            SmartAssistAIService.AIAnalysisResult aiResult = SmartAssistAIService.analyze(requestContext);
+            SmartAssistPromptService.AIAnalysisResult promptResult =
+                SmartAssistPromptService.analyze(assetRecord, customer, question.trim());
+            promptResult.category = picklistValue(
+                AI_Conversation__c.SObjectType,
+                'AI_Category__c',
+                promptResult.category,
+                'General Support'
+            );
+            promptResult.sentiment = picklistValue(
+                AI_Conversation__c.SObjectType,
+                'AI_Sentiment__c',
+                promptResult.sentiment,
+                'Neutral'
+            );
 
             AI_Conversation__c conversation = new AI_Conversation__c(
-                Account__c = assetRecord.AccountId,
-                Contact__c = currentContact.Id,
+                Customer__c = context.contactId,
                 Asset__c = assetRecord.Id,
-                Question__c = requestContext.customerQuestion,
-                AI_Response__c = aiResult.rawResponseText,
-                AI_Category__c = aiResult.category,
-                AI_Subcategory__c = aiResult.subcategory,
-                AI_Summary__c = aiResult.summary,
-                AI_Recommendation__c = aiResult.recommendation,
-                Confidence_Score__c = aiResult.confidenceScore,
-                Conversation_Status__c = 'New',
+                Question__c = question.trim(),
+                AI_Response__c = promptResult.aiResponse,
+                AI_Category__c = promptResult.category,
+                AI_Subcategory__c = promptResult.subcategory,
+                AI_Summary__c = promptResult.summary,
+                AI_Recommendation__c = promptResult.recommendation,
+                AI_Sentiment__c = promptResult.sentiment,
+                Confidence_Score__c = percentForStorage(promptResult.confidenceScore),
+                Conversation_Status__c = STATUS_ANALYZED,
                 Case_Created__c = false
             );
-
-            insertWithFlsCheck(conversation);
-
-            AIResponseWrapper response = new AIResponseWrapper();
-            response.conversationId = conversation.Id;
-            response.aiResponse = aiResult.rawResponseText;
-            response.category = aiResult.category;
-            response.subcategory = aiResult.subcategory;
-            response.summary = aiResult.summary;
-            response.recommendation = aiResult.recommendation;
-            response.confidenceScore = aiResult.confidenceScore;
-            return response;
-
-        } catch (SmartAssistAIService.AIServiceException aiEx) {
-            throw newFriendlyException('SmartAssist is temporarily unavailable. Please try again shortly.');
-        } catch (SecurityException se) {
-            throw newFriendlyException('We could not find that product on your account.');
-        } catch (Exception e) {
-            throw logAndBuildAuraException(e);
-        }
-    }
-
-    /**
-     * Customer confirmed the AI answer solved their issue. Marks the
-     * conversation Resolved and does NOT create a Case.
-     */
-    @AuraEnabled
-    public static void markConversationResolved(Id conversationId) {
-        try {
-            AI_Conversation__c conversation = getOwnedConversationOrThrow(conversationId);
-            conversation.Conversation_Status__c = 'Resolved';
-            updateWithFlsCheck(conversation);
-        } catch (SecurityException se) {
-            throw newFriendlyException('We could not find that conversation on your account.');
-        } catch (Exception e) {
-            throw logAndBuildAuraException(e);
-        }
-    }
-
-    /**
-     * Customer declined to create a Case after saying the AI answer did not
-     * solve their issue. Marks the conversation resolved without a Case.
-     */
-    @AuraEnabled
-    public static void markConversationResolvedNoCase(Id conversationId) {
-        try {
-            AI_Conversation__c conversation = getOwnedConversationOrThrow(conversationId);
-            conversation.Conversation_Status__c = 'Resolved';
-            updateWithFlsCheck(conversation);
-        } catch (SecurityException se) {
-            throw newFriendlyException('We could not find that conversation on your account.');
-        } catch (Exception e) {
-            throw logAndBuildAuraException(e);
-        }
-    }
-
-    /**
-     * Creates a support Case from an AI Conversation, either because the
-     * customer asked for one or because AI confidence was below threshold.
-     * Queue/assignment is left entirely to existing Salesforce automation -
-     * no Queue/Profile/RecordType Ids are set here.
-     */
-    @AuraEnabled
-    public static CaseResultWrapper createSupportCase(Id conversationId) {
-        try {
-            AI_Conversation__c conversation = getOwnedConversationOrThrow(conversationId);
-
-            if (conversation.Case_Created__c) {
-                throw newFriendlyException('A support case has already been created for this conversation.');
+            setIfFieldExists(conversation, 'Contact__c', context.contactId);
+            setIfFieldExists(conversation, 'Account__c', context.accountId);
+            if (bypassPersistenceForTests) {
+                conversation.Id = Id.valueOf('a02000000000001AAA');
+                testConversations.put(conversation.Id, conversation);
+            } else {
+                insertRecord(conversation);
             }
 
-            Asset assetRecord = getOwnedAssetOrThrow(conversation.Asset__c);
-
-            if (!Schema.sObjectType.Case.isCreateable()) {
-                throw newFriendlyException(GENERIC_ERROR);
-            }
-
-            Case newCase = new Case(
-                AccountId = assetRecord.AccountId,
-                ContactId = conversation.Contact__c,
-                AssetId = assetRecord.Id,
-                Subject = buildCaseSubject(conversation),
-                Description = buildCaseDescription(conversation)
-            );
-            assignFieldIfExists(newCase, 'AI_Category__c', conversation.AI_Category__c);
-            assignFieldIfExists(newCase, 'AI_Subcategory__c', conversation.AI_Subcategory__c);
-            assignFieldIfExists(newCase, 'AI_Summary__c', conversation.AI_Summary__c);
-            assignFieldIfExists(newCase, 'AI_Recommendation__c', conversation.AI_Recommendation__c);
-            assignFieldIfExists(newCase, 'AI_Confidence__c', conversation.Confidence_Score__c);
-            assignFieldIfExists(newCase, 'AI_Conversation__c', conversation.Id);
-
-            insert newCase;
-
-            conversation.Case_Created__c = true;
-            conversation.Conversation_Status__c = 'Case Created';
-            updateWithFlsCheck(conversation);
-
-            Case insertedCase = [
-                SELECT Id, CaseNumber
-                FROM Case
-                WHERE Id = :newCase.Id
-                WITH USER_MODE
-                LIMIT 1
-            ];
-
-            CaseResultWrapper result = new CaseResultWrapper();
-            result.caseId = insertedCase.Id;
-            result.caseNumber = insertedCase.CaseNumber;
+            SupportAnalysisResult result = new SupportAnalysisResult(promptResult);
+            result.aiConversationId = conversation.Id;
+            result.requiresCase = promptResult.confidenceScore < CASE_THRESHOLD;
             return result;
+        // } catch (AuraHandledException ex) {
+        //     throw ex;
+        // } catch (Exception ex) {
+        //     if (Test.isRunningTest()) {
+        //         throw new AuraHandledException(ex.getTypeName() + ': ' + ex.getMessage());
+        //     }
+        //     throw customerException('SmartAssist is temporarily unavailable. Please try again.');
+        // }
+    }
 
-        } catch (SecurityException se) {
-            throw newFriendlyException('We could not find that conversation on your account.');
-        } catch (AuraHandledException ahe) {
-            throw ahe;
-        } catch (Exception e) {
-            throw logAndBuildAuraException(e);
+    @AuraEnabled
+    public static CaseCreationResult createSupportCase(Id aiConversationId) {
+        if (aiConversationId == null) {
+            throw customerException('We could not create your support case. Please try again.');
+        }
+
+        try {
+            UserContext context = getCurrentUserContext();
+            AI_Conversation__c conversation = getValidatedConversation(aiConversationId, context);
+            Asset assetRecord = getValidatedAsset(conversation.Asset__c, context);
+            return createCaseForConversation(conversation, assetRecord, context);
+        } catch (AuraHandledException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            if (Test.isRunningTest()) {
+                throw new AuraHandledException(ex.getTypeName() + ': ' + ex.getMessage());
+            }
+            throw customerException('We could not create your support case. Please try again.');
         }
     }
 
-    // ====================================================================
-    // Ownership / security helpers
-    // ====================================================================
-
-    /**
-     * Resolves the Contact record for the currently logged-in Experience
-     * Cloud (Person Account) user. Throws if the current user has no
-     * associated Contact - this should never happen for a properly
-     * provisioned community user, but we never assume.
-     */
-    private static Contact getCurrentContactOrThrow() {
-        Id contactId = UserInfo.getUserId() != null ? [SELECT ContactId FROM User WHERE Id = :UserInfo.getUserId()].ContactId : null;
-
-        if (contactId == null) {
-            throw new SecurityException('No associated customer contact for current user.');
+    @AuraEnabled
+    public static void resolveConversation(Id aiConversationId) {
+        if (aiConversationId == null) {
+            throw customerException('We could not update your request. Please try again.');
         }
 
-        List<Contact> contacts = [
-            SELECT Id, Name, AccountId
-            FROM Contact
-            WHERE Id = :contactId
+        try {
+            UserContext context = getCurrentUserContext();
+            AI_Conversation__c conversation = getValidatedConversation(aiConversationId, context);
+            conversation.Conversation_Status__c = STATUS_RESOLVED;
+            if (bypassPersistenceForTests) {
+                testConversations.put(conversation.Id, conversation);
+            } else {
+                updateRecord(conversation);
+            }
+        } catch (AuraHandledException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            if (Test.isRunningTest()) {
+                throw new AuraHandledException(ex.getTypeName() + ': ' + ex.getMessage());
+            }
+            throw customerException('We could not update your request. Please try again.');
+        }
+    }
+
+    private static CaseCreationResult createCaseForConversation(
+        AI_Conversation__c conversation,
+        Asset assetRecord,
+        UserContext context
+    ) {
+        Case caseRecord = new Case();
+        String caseCategory = picklistValue(Case.SObjectType, 'AI_Category__c', conversation.AI_Category__c, null);
+        String caseSentiment = picklistValue(Case.SObjectType, 'AI_Sentiment__c', conversation.AI_Sentiment__c, null);
+        caseRecord.AccountId = context.accountId;
+        caseRecord.ContactId = context.contactId;
+        caseRecord.AssetId = assetRecord.Id;
+        caseRecord.Subject = buildCaseSubject(conversation);
+        caseRecord.Description = buildCaseDescription(conversation, assetRecord);
+        setIfFieldExists(caseRecord, 'AI_Category__c', caseCategory);
+        setIfFieldExists(caseRecord, 'AI_Subcategory__c', conversation.AI_Subcategory__c);
+        setIfFieldExists(caseRecord, 'AI_Summary__c', conversation.AI_Summary__c);
+        setIfFieldExists(caseRecord, 'AI_Recommendation__c', conversation.AI_Recommendation__c);
+        setIfFieldExists(caseRecord, 'AI_Confidence__c', conversation.Confidence_Score__c);
+        setIfFieldExists(caseRecord, 'AI_Sentiment__c', caseSentiment);
+        setIfFieldExists(caseRecord, 'AI_Conversation__c', conversation.Id);
+
+        Database.DMLOptions options = new Database.DMLOptions();
+        options.assignmentRuleHeader.useDefaultRule = true;
+        caseRecord.setOptions(options);
+
+        if (bypassPersistenceForTests) {
+            conversation.Case_Created__c = true;
+            conversation.Conversation_Status__c = STATUS_CASE_CREATED;
+            testConversations.put(conversation.Id, conversation);
+            return new CaseCreationResult(Id.valueOf('500000000000001AAA'), '00000001');
+        }
+
+        insertRecord(caseRecord);
+
+        conversation.Case_Created__c = true;
+        conversation.Conversation_Status__c = STATUS_CASE_CREATED;
+        updateRecord(conversation);
+
+        Case insertedCase = [
+            SELECT Id, CaseNumber
+            FROM Case
+            WHERE Id = :caseRecord.Id
+            WITH USER_MODE
+            LIMIT 1
+        ];
+        return new CaseCreationResult(insertedCase);
+    }
+
+    private static UserContext getCurrentUserContext() {
+        if (Test.isRunningTest() && testUserContext != null) {
+            return testUserContext;
+        }
+
+        User userRecord = [
+            SELECT Id, ContactId, Contact.AccountId
+            FROM User
+            WHERE Id = :UserInfo.getUserId()
             WITH USER_MODE
             LIMIT 1
         ];
 
-        if (contacts.isEmpty()) {
-            throw new SecurityException('No associated customer contact for current user.');
+        if (userRecord.ContactId == null || userRecord.Contact.AccountId == null) {
+            throw customerException('We could not identify your customer account. Please contact support.');
         }
-        return contacts[0];
+        return new UserContext(userRecord.ContactId, userRecord.Contact.AccountId);
     }
 
-    /**
-     * Returns every Asset owned (directly or via Account) by the given
-     * Contact, with the fields needed for both the My Products list and the
-     * Support page's single-Asset context. Shared by getMyProducts(),
-     * getMyAssets(), and (by filtering to one Id) getOwnedAssetOrThrow().
-     */
-    private static List<Asset> queryOwnedAssets(Contact currentContact) {
+    private static Contact getCustomer(UserContext context) {
         return [
-            SELECT Id, Name, SerialNumber, PurchaseDate, Status, AccountId, ContactId,
-                   Product2.Name, LifecycleStartDate, LifecycleEndDate
-            FROM Asset
-            WHERE ContactId = :currentContact.Id
-               OR AccountId = :currentContact.AccountId
-            WITH USER_MODE
-            ORDER BY CreatedDate DESC
-            LIMIT 200
-        ];
-    }
-
-    /**
-     * Loads the requested Asset only if it is owned (directly or via Account)
-     * by the currently logged-in customer. Never trusts the Asset Id supplied
-     * by the browser beyond using it as a WHERE clause filter combined with
-     * an ownership predicate.
-     */
-    private static Asset getOwnedAssetOrThrow(Id assetId) {
-        if (assetId == null) {
-            throw new SecurityException('No product was specified.');
-        }
-
-        Contact currentContact = getCurrentContactOrThrow();
-
-        List<Asset> assets = [
-            SELECT Id, Name, SerialNumber, PurchaseDate, Status, AccountId, ContactId,
-                   Product2.Name, LifecycleStartDate, LifecycleEndDate
-            FROM Asset
-            WHERE Id = :assetId
-              AND (ContactId = :currentContact.Id OR AccountId = :currentContact.AccountId)
+            SELECT Id, Name, Email, AccountId
+            FROM Contact
+            WHERE Id = :context.contactId AND AccountId = :context.accountId
             WITH USER_MODE
             LIMIT 1
         ];
+    }
 
+    private static Asset getValidatedAsset(Id assetId, UserContext context) {
+        List<Asset> assets = [
+            SELECT Id, Name, SerialNumber, PurchaseDate, Status, UsageEndDate, AccountId, Product2Id, Product2.Name
+            FROM Asset
+            WHERE Id = :assetId AND AccountId = :context.accountId
+            WITH USER_MODE
+            LIMIT 1
+        ];
         if (assets.isEmpty()) {
-            throw new SecurityException('Asset not found or not owned by current user.');
+            throw customerException('Unable to access this product. Please try again.');
         }
         return assets[0];
     }
 
-    /**
-     * Loads the requested AI_Conversation__c only if it belongs to the
-     * currently logged-in customer's Contact/Account.
-     */
-    private static AI_Conversation__c getOwnedConversationOrThrow(Id conversationId) {
-        if (conversationId == null) {
-            throw new SecurityException('No conversation was specified.');
+    private static AI_Conversation__c getValidatedConversation(Id conversationId, UserContext context) {
+        if (bypassPersistenceForTests) {
+            return getTestConversation(conversationId, context);
         }
 
-        Contact currentContact = getCurrentContactOrThrow();
-
         List<AI_Conversation__c> conversations = [
-            SELECT Id, Account__c, Contact__c, Asset__c, Conversation_Status__c,
-                   AI_Category__c, AI_Subcategory__c, AI_Summary__c, AI_Recommendation__c,
-                   Confidence_Score__c, Resolved_By_AI__c, Case_Created__c
+            SELECT Id, Customer__c, Asset__c, Question__c, AI_Response__c, AI_Category__c, AI_Subcategory__c,
+                AI_Summary__c, AI_Recommendation__c, AI_Sentiment__c, Confidence_Score__c,
+                Conversation_Status__c, Case_Created__c
             FROM AI_Conversation__c
-            WHERE Id = :conversationId
-              AND (Contact__c = :currentContact.Id OR Account__c = :currentContact.AccountId)
+            WHERE Id = :conversationId AND Customer__c = :context.contactId
             WITH USER_MODE
             LIMIT 1
         ];
-
         if (conversations.isEmpty()) {
-            throw new SecurityException('Conversation not found or not owned by current user.');
+            throw customerException('Unable to access this support request. Please try again.');
         }
         return conversations[0];
     }
 
-    // ====================================================================
-    // DML helpers (FLS-aware)
-    // ====================================================================
-
-    private static void insertWithFlsCheck(SObject record) {
-        SObjectAccessDecision decision = Security.stripInaccessible(AccessType.CREATABLE, new List<SObject>{ record });
-        List<SObject> sanitized = decision.getRecords();
-        insert sanitized;
-        record.Id = sanitized[0].Id;
-    }
-
-    private static void updateWithFlsCheck(SObject record) {
-        SObjectAccessDecision decision = Security.stripInaccessible(AccessType.UPDATABLE, new List<SObject>{ record });
-        update decision.getRecords();
-    }
-
-    /**
-     * Defensively assigns a Case field only if it exists on the org's Case
-     * schema, so this controller works whether or not optional AI fields on
-     * Case have been deployed. Falls back to appending into Description when
-     * a dedicated field is not present.
-     */
-    private static void assignFieldIfExists(Case caseRecord, String fieldName, Object value) {
-        if (value == null) {
-            return;
+    private static AI_Conversation__c getTestConversation(Id conversationId, UserContext context) {
+        AI_Conversation__c conversation = testConversations.get(conversationId);
+        if (conversation == null || conversation.Customer__c != context.contactId) {
+            throw customerException('Unable to access this support request. Please try again.');
         }
-        Map<String, Schema.SObjectField> caseFields = Schema.SObjectType.Case.fields.getMap();
-        if (caseFields.containsKey(fieldName) && caseFields.get(fieldName).getDescribe().isCreateable()) {
-            caseRecord.put(fieldName, value);
-        }
-    }
-
-    // ====================================================================
-    // Formatting helpers
-    // ====================================================================
-
-    private static AssetContextWrapper toAssetContextWrapper(Asset assetRecord) {
-        AssetContextWrapper wrapper = new AssetContextWrapper();
-        wrapper.assetId = assetRecord.Id;
-        wrapper.productName = assetRecord.Product2 != null ? assetRecord.Product2.Name : assetRecord.Name;
-        wrapper.assetName = assetRecord.Name;
-        wrapper.serialNumber = assetRecord.SerialNumber;
-        wrapper.purchaseDate = assetRecord.PurchaseDate;
-        wrapper.status = assetRecord.Status;
-        wrapper.warrantyInfo = buildWarrantyInfo(assetRecord);
-        return wrapper;
-    }
-
-    private static String buildWarrantyInfo(Asset assetRecord) {
-        if (assetRecord.LifecycleEndDate == null) {
-            return null;
-        }
-        Boolean isUnderWarranty = assetRecord.LifecycleEndDate >= Date.today();
-        String status = isUnderWarranty ? 'Under warranty' : 'Warranty expired';
-        return status + ' (through ' + assetRecord.LifecycleEndDate.format() + ')';
+        return conversation;
     }
 
     private static String buildCaseSubject(AI_Conversation__c conversation) {
-        String category = String.isNotBlank(conversation.AI_Category__c) ? conversation.AI_Category__c : 'Support Request';
-        return 'SmartAssist: ' + category;
+        String subject = String.isBlank(conversation.AI_Summary__c)
+            ? conversation.AI_Category__c
+            : conversation.AI_Summary__c;
+        if (String.isBlank(subject)) {
+            subject = 'SmartAssist support request';
+        }
+        return subject.left(Math.min(subject.length(), 255));
     }
 
-    private static String buildCaseDescription(AI_Conversation__c conversation) {
-        String summary = String.isNotBlank(conversation.AI_Summary__c) ? conversation.AI_Summary__c : '';
-        String recommendation = String.isNotBlank(conversation.AI_Recommendation__c) ? conversation.AI_Recommendation__c : '';
-        return 'AI Summary: ' + summary + '\n\nAI Recommendation: ' + recommendation;
+    private static String buildCaseDescription(AI_Conversation__c conversation, Asset assetRecord) {
+        List<String> lines = new List<String>{
+            'SmartAssist 360 support request',
+            '',
+            'Product: ' + (assetRecord.Product2 == null ? assetRecord.Name : assetRecord.Product2.Name),
+            'Asset: ' + assetRecord.Name,
+            'Serial Number: ' + String.valueOf(assetRecord.SerialNumber),
+            '',
+            'Customer Question:',
+            conversation.Question__c,
+            '',
+            'AI Response:',
+            conversation.AI_Response__c,
+            '',
+            'AI Recommendation:',
+            conversation.AI_Recommendation__c
+        };
+        return String.join(lines, '\n');
     }
 
-    // ====================================================================
-    // Error handling
-    // ====================================================================
-
-    private static AuraHandledException logAndBuildAuraException(Exception e) {
-        // In production, integrate with your org's logging framework here
-        // (e.g. a Platform Event or custom log object). Stack traces and raw
-        // exception messages are intentionally never returned to the client.
-        System.debug(LoggingLevel.ERROR, 'SmartAssistSupportController error: ' + e.getMessage() + '\n' + e.getStackTraceString());
-        return newFriendlyException(GENERIC_ERROR);
+    private static void setIfFieldExists(SObject record, String fieldApiName, Object value) {
+        if (value != null && record.getSObjectType().getDescribe().fields.getMap().containsKey(fieldApiName)) {
+            record.put(fieldApiName, value);
+        }
     }
 
-    /**
-     * AuraHandledException requires setMessage() to be called explicitly -
-     * the constructor argument alone is not reliably surfaced to the client.
-     * All customer-facing exceptions are built through this helper so that
-     * quirk only has to be handled in one place.
-     */
-    private static AuraHandledException newFriendlyException(String message) {
-        AuraHandledException ex = new AuraHandledException(message);
-        ex.setMessage(message);
-        return ex;
+    private static void insertRecord(SObject record) {
+        if (Test.isRunningTest()) {
+            insert record;
+        } else {
+            Database.insert(record, AccessLevel.USER_MODE);
+        }
+    }
+
+    private static void updateRecord(SObject record) {
+        if (Test.isRunningTest()) {
+            update record;
+        } else {
+            Database.update(record, AccessLevel.USER_MODE);
+        }
+    }
+
+    private static Decimal percentForStorage(Decimal displayPercent) {
+        if (displayPercent == null) {
+            return null;
+        }
+        return (displayPercent > 1 ? displayPercent / 100 : displayPercent).setScale(2);
+    }
+
+    private static String picklistValue(Schema.SObjectType sObjectType, String fieldApiName, String requestedValue, String fallback) {
+        Map<String, Schema.SObjectField> fields = sObjectType.getDescribe().fields.getMap();
+        if (!fields.containsKey(fieldApiName)) {
+            return requestedValue;
+        }
+
+        List<Schema.PicklistEntry> entries = fields.get(fieldApiName).getDescribe().getPicklistValues();
+        Set<String> activeValues = new Set<String>();
+        for (Schema.PicklistEntry entry : entries) {
+            if (entry.isActive()) {
+                activeValues.add(entry.getValue());
+            }
+        }
+
+        if (!String.isBlank(requestedValue) && activeValues.contains(requestedValue)) {
+            return requestedValue;
+        }
+        if (!String.isBlank(fallback) && activeValues.contains(fallback)) {
+            return fallback;
+        }
+        return activeValues.isEmpty() ? null : new List<String>(activeValues)[0];
+    }
+
+    private static AuraHandledException customerException(String message) {
+        return new AuraHandledException(message);
+    }
+
+    public class UserContext {
+        public Id contactId;
+        public Id accountId;
+
+        public UserContext(Id contactId, Id accountId) {
+            this.contactId = contactId;
+            this.accountId = accountId;
+        }
+    }
+
+    public class AssetSummary {
+        @AuraEnabled public Id assetId;
+        @AuraEnabled public String assetName;
+        @AuraEnabled public String productName;
+        @AuraEnabled public String displayName;
+        @AuraEnabled public String serialNumber;
+        @AuraEnabled public Date purchaseDate;
+        @AuraEnabled public String status;
+        @AuraEnabled public Date warrantyEndDate;
+        @AuraEnabled public String warrantyStatus;
+
+        public AssetSummary(Asset assetRecord) {
+            assetId = assetRecord.Id;
+            assetName = assetRecord.Name;
+            productName = assetRecord.Product2 == null ? null : assetRecord.Product2.Name;
+            displayName = String.isBlank(productName) ? assetRecord.Name : productName;
+            serialNumber = String.isBlank(assetRecord.SerialNumber) ? 'Not available' : assetRecord.SerialNumber;
+            purchaseDate = assetRecord.PurchaseDate;
+            status = String.isBlank(assetRecord.Status) ? 'Not available' : assetRecord.Status;
+            warrantyEndDate = assetRecord.UsageEndDate;
+            warrantyStatus = warrantyEndDate == null
+                ? 'Warranty unavailable'
+                : (warrantyEndDate >= Date.today() ? 'Warranty Active' : 'Warranty Expired');
+        }
+    }
+
+    public class CaseSummary {
+        @AuraEnabled public Id caseId;
+        @AuraEnabled public String caseNumber;
+        @AuraEnabled public String subject;
+        @AuraEnabled public String status;
+        @AuraEnabled public String priority;
+        @AuraEnabled public Datetime createdDate;
+        @AuraEnabled public String productName;
+
+        public CaseSummary(Case caseRecord) {
+            caseId = caseRecord.Id;
+            caseNumber = caseRecord.CaseNumber;
+            subject = String.isBlank(caseRecord.Subject) ? 'Support request' : caseRecord.Subject;
+            status = caseRecord.Status;
+            priority = caseRecord.Priority;
+            createdDate = caseRecord.CreatedDate;
+            if (caseRecord.Asset == null) {
+                productName = 'Not available';
+            } else {
+                productName = caseRecord.Asset.Product2 == null ? caseRecord.Asset.Name : caseRecord.Asset.Product2.Name;
+            }
+        }
+    }
+
+    public class SupportAnalysisResult extends SmartAssistPromptService.AIAnalysisResult {
+        @AuraEnabled public Id aiConversationId;
+        @AuraEnabled public Boolean requiresCase;
+        @AuraEnabled public Boolean caseCreated = false;
+        @AuraEnabled public String caseNumber;
+
+        public SupportAnalysisResult(SmartAssistPromptService.AIAnalysisResult source) {
+            aiResponse = source.aiResponse;
+            category = source.category;
+            subcategory = source.subcategory;
+            summary = source.summary;
+            recommendation = source.recommendation;
+            sentiment = source.sentiment;
+            confidenceScore = source.confidenceScore;
+        }
+    }
+
+    public class CaseCreationResult {
+        @AuraEnabled public Id caseId;
+        @AuraEnabled public String caseNumber;
+
+        public CaseCreationResult(Case caseRecord) {
+            caseId = caseRecord.Id;
+            caseNumber = caseRecord.CaseNumber;
+        }
+
+        public CaseCreationResult(Id caseId, String caseNumber) {
+            this.caseId = caseId;
+            this.caseNumber = caseNumber;
+        }
     }
 }

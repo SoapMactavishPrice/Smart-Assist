@@ -1,0 +1,241 @@
+<template>
+    <section class="support-shell">
+        <template if:true={hasError}>
+            <div class="error-panel slds-m-bottom_medium" role="alert">
+                <lightning-icon icon-name="utility:error" size="small" alternative-text="Error"></lightning-icon>
+                <span>{errorMessage}</span>
+            </div>
+        </template>
+
+        <template if:true={isProductList}>
+            <header class="page-header">
+                <div>
+                    <h1>My Products</h1>
+                    <p>Choose a registered SmartHome Pro product to get AI-powered support.</p>
+                </div>
+                <lightning-button-icon icon-name="utility:refresh" variant="border-filled" alternative-text="Refresh products" title="Refresh products" onclick={loadProducts}></lightning-button-icon>
+            </header>
+
+            <template if:true={isLoadingProducts}>
+                <div class="loading-state">
+                    <lightning-spinner alternative-text="Loading products" size="medium"></lightning-spinner>
+                    <span>Loading your products...</span>
+                </div>
+            </template>
+
+            <template if:true={showEmptyProducts}>
+                <div class="empty-state">
+                    <lightning-icon icon-name="utility:package" size="large" alternative-text=""></lightning-icon>
+                    <p>You don't have any registered products yet.</p>
+                </div>
+            </template>
+
+            <template if:true={showProducts}>
+                <div class="product-grid">
+                    <template for:each={products} for:item="product">
+                        <article key={product.assetId} class="product-card">
+                            <div class="card-topline">
+                                <lightning-icon icon-name="standard:product" size="medium" alternative-text=""></lightning-icon>
+                                <lightning-badge label={product.warrantyStatus}></lightning-badge>
+                            </div>
+                            <h2>{product.displayName}</h2>
+                            <dl>
+                                <div>
+                                    <dt>Asset Name</dt>
+                                    <dd>{product.assetName}</dd>
+                                </div>
+                                <div>
+                                    <dt>Serial Number</dt>
+                                    <dd>{product.serialNumber}</dd>
+                                </div>
+                                <div>
+                                    <dt>Status</dt>
+                                    <dd>{product.status}</dd>
+                                </div>
+                                <div>
+                                    <dt>Purchase Date</dt>
+                                    <dd>
+                                        <lightning-formatted-date-time value={product.purchaseDate}></lightning-formatted-date-time>
+                                    </dd>
+                                </div>
+                            </dl>
+                            <lightning-button label="Get Support" variant="brand" data-id={product.assetId} onclick={handleGetSupport}></lightning-button>
+                        </article>
+                    </template>
+                </div>
+            </template>
+        </template>
+
+        <template if:true={isSupport}>
+            <button class="back-button" type="button" onclick={handleBackToProducts}>
+                <lightning-icon icon-name="utility:back" size="x-small" alternative-text=""></lightning-icon>
+                <span>Back to My Products</span>
+            </button>
+
+            <div class="support-panel">
+                <div class="support-heading">
+                    <div>
+                        <h1>SmartAssist 360 Support</h1>
+                        <p>Product: <strong>{selectedProduct.displayName}</strong></p>
+                        <p>Serial Number: <strong>{selectedProduct.serialNumber}</strong></p>
+                    </div>
+                    <lightning-icon icon-name="utility:einstein" size="large" alternative-text=""></lightning-icon>
+                </div>
+
+                <template if:true={showQuestionForm}>
+                    <lightning-textarea
+                        label="How can we help you?"
+                        value={question}
+                        placeholder="Describe the issue you're experiencing with this product..."
+                        onchange={handleQuestionChange}
+                        disabled={isProcessing}
+                        class="question-box"
+                    ></lightning-textarea>
+                    <div class="actions">
+                        <lightning-button label="Ask SmartAssist" variant="brand" onclick={handleAskSmartAssist} disabled={isProcessing}></lightning-button>
+                    </div>
+                </template>
+
+                <template if:true={isProcessing}>
+                    <div class="processing-state">
+                        <lightning-spinner alternative-text="SmartAssist is analyzing" size="medium"></lightning-spinner>
+                        <span>SmartAssist is analyzing your request...</span>
+                    </div>
+                </template>
+
+                <template if:true={hasAiResult}>
+                    <article class="ai-response">
+                        <div class="response-header">
+                            <h2>SmartAssist Recommendation</h2>
+                            <div class="confidence">
+                                <span>{confidenceLabel}</span>
+                                <lightning-progress-ring value={analysis.confidenceScore} size="medium"></lightning-progress-ring>
+                            </div>
+                        </div>
+                        <p class="response-text">{analysis.aiResponse}</p>
+                        <dl class="analysis-grid">
+                            <div>
+                                <dt>Category</dt>
+                                <dd>{analysis.category}</dd>
+                            </div>
+                            <div>
+                                <dt>Subcategory</dt>
+                                <dd>{analysis.subcategory}</dd>
+                            </div>
+                            <div>
+                                <dt>Sentiment</dt>
+                                <dd>{analysis.sentiment}</dd>
+                            </div>
+                            <div>
+                                <dt>Summary</dt>
+                                <dd>{analysis.summary}</dd>
+                            </div>
+                        </dl>
+                        <div class="recommendation">
+                            <h3>Recommended Next Step</h3>
+                            <p>{analysis.recommendation}</p>
+                        </div>
+                    </article>
+                </template>
+
+                <template if:true={showSatisfactionQuestion}>
+                    <div class="decision-panel">
+                        <h2>Are you satisfied with the answer?</h2>
+                        <div class="actions">
+                            <lightning-button label="Yes, this solved my issue" variant="brand" onclick={handleResolved}></lightning-button>
+                            <lightning-button label="No, I still need help" onclick={handleNeedHelp}></lightning-button>
+                        </div>
+                    </div>
+                </template>
+
+                <template if:true={showCreateCaseQuestion}>
+                    <div class="decision-panel">
+                        <h2>Would you like to create a support case?</h2>
+                        <div class="actions">
+                            <lightning-button label="Yes, Create Case" variant="brand" onclick={handleCreateCase}></lightning-button>
+                            <lightning-button label="No, I'm done" onclick={handleResolved}></lightning-button>
+                        </div>
+                    </div>
+                </template>
+
+                <template if:true={showAutoCaseMessage}>
+                    <div class="decision-panel">
+                        <h2>Your request requires additional assistance.</h2>
+                        <p>We're creating a support case for our support team.</p>
+                    </div>
+                </template>
+
+                <template if:true={caseCreated}>
+                    <div class="success-panel">
+                        <lightning-icon icon-name="utility:success" size="small" alternative-text=""></lightning-icon>
+                        <div>
+                            <h2>Your support case has been created successfully.</h2>
+                            <p>Case Number: {caseNumber}</p>
+                        </div>
+                    </div>
+                </template>
+
+                <template if:true={conversationResolved}>
+                    <div class="success-panel">
+                        <lightning-icon icon-name="utility:success" size="small" alternative-text=""></lightning-icon>
+                        <h2>Great! We're glad we could help.</h2>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <template if:true={isCases}>
+            <header class="page-header">
+                <div>
+                    <h1>My Cases</h1>
+                    <p>Review your SmartHome Pro support requests.</p>
+                </div>
+                <lightning-button-icon icon-name="utility:refresh" variant="border-filled" alternative-text="Refresh cases" title="Refresh cases" onclick={loadCases}></lightning-button-icon>
+            </header>
+
+            <template if:true={isLoadingCases}>
+                <div class="loading-state">
+                    <lightning-spinner alternative-text="Loading cases" size="medium"></lightning-spinner>
+                    <span>Loading your cases...</span>
+                </div>
+            </template>
+
+            <template if:true={showEmptyCases}>
+                <div class="empty-state">
+                    <lightning-icon icon-name="standard:case" size="large" alternative-text=""></lightning-icon>
+                    <p>You don't have any support cases.</p>
+                </div>
+            </template>
+
+            <template if:true={showCases}>
+                <div class="case-list">
+                    <template for:each={cases} for:item="item">
+                        <article key={item.caseId} class="case-card">
+                            <div class="case-header">
+                                <span>Case #{item.caseNumber}</span>
+                                <lightning-badge label={item.status}></lightning-badge>
+                            </div>
+                            <h2>{item.subject}</h2>
+                            <dl>
+                                <div>
+                                    <dt>Priority</dt>
+                                    <dd>{item.priority}</dd>
+                                </div>
+                                <div>
+                                    <dt>Created Date</dt>
+                                    <dd>
+                                        <lightning-formatted-date-time value={item.createdDate} year="numeric" month="short" day="2-digit"></lightning-formatted-date-time>
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt>Product</dt>
+                                    <dd>{item.productName}</dd>
+                                </div>
+                            </dl>
+                        </article>
+                    </template>
+                </div>
+            </template>
+        </template>
+    </section>
+</template>

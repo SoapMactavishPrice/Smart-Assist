@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningMessageChannel xmlns="http://soap.sforce.com/2006/04/metadata">
+    <masterLabel>SmartAssist Navigation</masterLabel>
+    <isExposed>true</isExposed>
+    <description>Navigation messages between SmartAssist 360 Experience Cloud components.</description>
+    <lightningMessageFields>
+        <fieldName>action</fieldName>
+        <description>Navigation action requested by the publisher.</description>
+    </lightningMessageFields>
+    <lightningMessageFields>
+        <fieldName>recordId</fieldName>
+        <description>Optional record identifier for contextual actions.</description>
+    </lightningMessageFields>
+    <lightningMessageFields>
+        <fieldName>context</fieldName>
+        <description>Optional serialized context for future SmartAssist navigation actions.</description>
+    </lightningMessageFields>
+</LightningMessageChannel>

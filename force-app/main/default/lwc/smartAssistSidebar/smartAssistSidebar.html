@@ -1,0 +1,19 @@
+<template>
+    <aside class="sidebar" aria-label="SmartAssist navigation">
+        <div class="brand">
+            <lightning-icon icon-name="utility:home" size="small" alternative-text="SmartAssist 360"></lightning-icon>
+            <span>SmartAssist 360</span>
+        </div>
+
+        <nav class="nav">
+            <button class={productsClass} type="button" data-action="NAVIGATE_TO_PRODUCTS" onclick={handleNavigate}>
+                <lightning-icon icon-name="standard:product" size="small" alternative-text=""></lightning-icon>
+                <span>My Products</span>
+            </button>
+            <button class={casesClass} type="button" data-action="NAVIGATE_TO_CASES" onclick={handleNavigate}>
+                <lightning-icon icon-name="standard:case" size="small" alternative-text=""></lightning-icon>
+                <span>My Cases</span>
+            </button>
+        </nav>
+    </aside>
+</template>

@@ -1,0 +1,73 @@
+.sidebar {
+    min-height: 100%;
+    background: #0f172a;
+    color: #ffffff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+}
+
+.brand {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 1.25rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.brand lightning-icon {
+    --slds-c-icon-color-foreground-default: #38bdf8;
+}
+
+.nav {
+    display: grid;
+    gap: 0.35rem;
+    padding: 0.75rem;
+}
+
+.nav-item {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.75rem 0.9rem;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #dbeafe;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.nav-item lightning-icon {
+    --slds-c-icon-color-foreground-default: #93c5fd;
+}
+
+.nav-item:hover,
+.nav-item:focus-visible {
+    background: rgba(59, 130, 246, 0.18);
+    color: #ffffff;
+}
+
+.nav-item.active {
+    background: #1d4ed8;
+    color: #ffffff;
+}
+
+@media (max-width: 720px) {
+    .sidebar {
+        border-radius: 0;
+    }
+
+    .nav {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .nav-item {
+        justify-content: center;
+    }
+}
