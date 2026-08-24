@@ -7,63 +7,46 @@
             </div>
         </template>
 
-        <template if:true={isProductList}>
-            <header class="page-header">
-                <div>
-                    <h1>My Products</h1>
-                    <p>Choose a registered SmartHome Pro product to get AI-powered support.</p>
-                </div>
-                <lightning-button-icon icon-name="utility:refresh" variant="border-filled" alternative-text="Refresh products" title="Refresh products" onclick={loadProducts}></lightning-button-icon>
-            </header>
-
-            <template if:true={isLoadingProducts}>
-                <div class="loading-state">
-                    <lightning-spinner alternative-text="Loading products" size="medium"></lightning-spinner>
-                    <span>Loading your products...</span>
-                </div>
-            </template>
-
-            <template if:true={showEmptyProducts}>
-                <div class="empty-state">
-                    <lightning-icon icon-name="utility:package" size="large" alternative-text=""></lightning-icon>
-                    <p>You don't have any registered products yet.</p>
-                </div>
-            </template>
-
-            <template if:true={showProducts}>
-                <div class="product-grid">
-                    <template for:each={products} for:item="product">
-                        <article key={product.assetId} class="product-card">
-                            <div class="card-topline">
-                                <lightning-icon icon-name="standard:product" size="medium" alternative-text=""></lightning-icon>
-                                <lightning-badge label={product.warrantyStatus}></lightning-badge>
-                            </div>
-                            <h2>{product.displayName}</h2>
-                            <dl>
-                                <div>
-                                    <dt>Asset Name</dt>
-                                    <dd>{product.assetName}</dd>
-                                </div>
-                                <div>
-                                    <dt>Serial Number</dt>
-                                    <dd>{product.serialNumber}</dd>
-                                </div>
-                                <div>
-                                    <dt>Status</dt>
-                                    <dd>{product.status}</dd>
-                                </div>
-                                <div>
-                                    <dt>Purchase Date</dt>
-                                    <dd>
-                                        <lightning-formatted-date-time value={product.purchaseDate}></lightning-formatted-date-time>
-                                    </dd>
-                                </div>
-                            </dl>
-                            <lightning-button label="Get Support" variant="brand" data-id={product.assetId} onclick={handleGetSupport}></lightning-button>
-                        </article>
-                    </template>
-                </div>
-            </template>
+        <template if:true={showProducts}>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Product</th>
+                            <th scope="col">Asset Name</th>
+                            <th scope="col">Serial Number</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Purchase Date</th>
+                            <th scope="col">Warranty</th>
+                            <th scope="col"><span class="slds-assistive-text">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template for:each={products} for:item="product">
+                            <tr key={product.assetId}>
+                                <th scope="row" data-label="Product">
+                                    <div class="row-title">
+                                        <lightning-icon icon-name="standard:product" size="x-small" alternative-text=""></lightning-icon>
+                                        <span>{product.displayName}</span>
+                                    </div>
+                                </th>
+                                <td data-label="Asset Name">{product.assetName}</td>
+                                <td data-label="Serial Number">{product.serialNumber}</td>
+                                <td data-label="Status">{product.status}</td>
+                                <td data-label="Purchase Date">
+                                    <lightning-formatted-date-time value={product.purchaseDate}></lightning-formatted-date-time>
+                                </td>
+                                <td data-label="Warranty">
+                                    <lightning-badge label={product.warrantyStatus}></lightning-badge>
+                                </td>
+                                <td data-label="Actions" class="actions-cell">
+                                    <lightning-button label="Get Support" variant="brand" data-id={product.assetId} onclick={handleGetSupport}></lightning-button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
         </template>
 
         <template if:true={isSupport}>
@@ -184,58 +167,37 @@
             </div>
         </template>
 
-        <template if:true={isCases}>
-            <header class="page-header">
-                <div>
-                    <h1>My Cases</h1>
-                    <p>Review your SmartHome Pro support requests.</p>
-                </div>
-                <lightning-button-icon icon-name="utility:refresh" variant="border-filled" alternative-text="Refresh cases" title="Refresh cases" onclick={loadCases}></lightning-button-icon>
-            </header>
-
-            <template if:true={isLoadingCases}>
-                <div class="loading-state">
-                    <lightning-spinner alternative-text="Loading cases" size="medium"></lightning-spinner>
-                    <span>Loading your cases...</span>
-                </div>
-            </template>
-
-            <template if:true={showEmptyCases}>
-                <div class="empty-state">
-                    <lightning-icon icon-name="standard:case" size="large" alternative-text=""></lightning-icon>
-                    <p>You don't have any support cases.</p>
-                </div>
-            </template>
-
-            <template if:true={showCases}>
-                <div class="case-list">
-                    <template for:each={cases} for:item="item">
-                        <article key={item.caseId} class="case-card">
-                            <div class="case-header">
-                                <span>Case #{item.caseNumber}</span>
-                                <lightning-badge label={item.status}></lightning-badge>
-                            </div>
-                            <h2>{item.subject}</h2>
-                            <dl>
-                                <div>
-                                    <dt>Priority</dt>
-                                    <dd>{item.priority}</dd>
-                                </div>
-                                <div>
-                                    <dt>Created Date</dt>
-                                    <dd>
-                                        <lightning-formatted-date-time value={item.createdDate} year="numeric" month="short" day="2-digit"></lightning-formatted-date-time>
-                                    </dd>
-                                </div>
-                                <div>
-                                    <dt>Product</dt>
-                                    <dd>{item.productName}</dd>
-                                </div>
-                            </dl>
-                        </article>
-                    </template>
-                </div>
-            </template>
+        <template if:true={showCases}>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Case Number</th>
+                            <th scope="col">Subject</th>
+                            <th scope="col">Priority</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Created Date</th>
+                            <th scope="col">Product</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template for:each={cases} for:item="item">
+                            <tr key={item.caseId}>
+                                <th scope="row" data-label="Case Number">#{item.caseNumber}</th>
+                                <td data-label="Subject">{item.subject}</td>
+                                <td data-label="Priority">{item.priority}</td>
+                                <td data-label="Status">
+                                    <lightning-badge label={item.status}></lightning-badge>
+                                </td>
+                                <td data-label="Created Date">
+                                    <lightning-formatted-date-time value={item.createdDate} year="numeric" month="short" day="2-digit"></lightning-formatted-date-time>
+                                </td>
+                                <td data-label="Product">{item.productName}</td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
         </template>
     </section>
 </template>

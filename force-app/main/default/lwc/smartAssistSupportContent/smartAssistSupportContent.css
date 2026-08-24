@@ -36,12 +36,6 @@ p {
     color: #475569;
 }
 
-.product-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-    gap: 1rem;
-}
-
 .product-card,
 .case-card,
 .support-panel,
@@ -215,5 +209,122 @@ dd {
     .product-card,
     .case-card {
         padding: 0.9rem;
+    }
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    border: 1px solid #d9e2ef;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.data-table thead th {
+    position: sticky;
+    top: 0;
+    padding: 0.75rem 1rem;
+    background: #f8fafc;
+    border-bottom: 2px solid #e2e8f0;
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.data-table tbody tr {
+    border-bottom: 1px solid #eef2f7;
+}
+
+.data-table tbody tr:last-child {
+    border-bottom: 0;
+}
+
+.data-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.data-table th[scope="row"],
+.data-table td {
+    padding: 0.85rem 1rem;
+    color: #1e293b;
+    vertical-align: middle;
+    text-align: left;
+    font-weight: 400;
+}
+
+.data-table th[scope="row"] {
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.row-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.row-title lightning-icon {
+    --slds-c-icon-color-foreground-default: #1d4ed8;
+    flex-shrink: 0;
+}
+
+.actions-cell {
+    white-space: nowrap;
+    text-align: right;
+}
+
+@media (max-width: 720px) {
+    .data-table thead {
+        display: none;
+    }
+
+    .data-table,
+    .data-table tbody,
+    .data-table tr,
+    .data-table td,
+    .data-table th[scope="row"] {
+        display: block;
+        width: 100%;
+    }
+
+    .data-table tbody tr {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .data-table td,
+    .data-table th[scope="row"] {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.4rem 0;
+        border: 0;
+    }
+
+    .data-table td::before,
+    .data-table th[scope="row"]::before {
+        content: attr(data-label);
+        color: #64748b;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    .actions-cell {
+        justify-content: flex-start;
+        text-align: left;
+    }
+
+    .actions-cell::before {
+        display: none;
     }
 }
